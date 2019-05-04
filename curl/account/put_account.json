@@ -1,0 +1,12 @@
+{
+  "uuid": "<INSERT UUID HERE>",
+  "primaryCredential": "freer",
+  "secondaryCredential": "$2a$10$Ey9SYyw6OJMLHWhYfyUb3erO4BwdQkmmKfierW6EwWhgFyC0D3RAS",
+  "type": "STUDENT",
+  "givenName": "Jon",
+  "surname": "Freer",
+  "bio": "I like to code.",
+  "emailAddress": "freerjm@miamioh.edu",
+  "phoneNumber": "+16146573542",
+  "subscriptions": []
+}

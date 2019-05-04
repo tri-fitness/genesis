@@ -1,0 +1,18 @@
+version: '3'
+services:
+  genesis:
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile
+    env_file: ./genesis.env
+    ports:
+      - '9090:8080'
+    depends_on:
+      - genesis-db
+  genesis-db:
+    image: mysql
+    restart: always
+    env_file: ./db.env
+    volumes:
+      - './mysql/:/etc/mysql/conf.d'
+      - './mysql/startup_scripts/:/docker-entrypoint-initdb.d'
