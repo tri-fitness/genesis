@@ -2,20 +2,20 @@
 
 
 [[projects]]
-  digest = "1:94c8b086b1f2a311ccabe6a18ceefcfed5b78a7a963f38d4be69e6eff0687c22"
+  digest = "1:c45b476cb9555e42e02bed094a7b2bc022bd3b50663180d4516f37151e83db7f"
   name = "github.com/freerware/work"
   packages = ["."]
   pruneopts = "UT"
-  revision = "4106889a0bddfd8d5c179be331c022ab510aae1f"
-  version = "v1.0.0"
+  revision = "f3d43e21363237c15f89ae390d51cf188a00ba94"
+  version = "v2.0.1"
 
 [[projects]]
-  digest = "1:1fee48c5f070f8bd2f8378a1b27c94e4dfd43ac6ef43024ebf2957bf13d33fc0"
+  digest = "1:e3d980898ac6e4392f22ff8ddc6131fee6d959f197ce430dd5a640067545b152"
   name = "github.com/freerware/workfx"
   packages = ["."]
   pruneopts = "UT"
-  revision = "d040e9eea8d40d41593ba029d22d78a9691b52a9"
-  version = "v1.0.0"
+  revision = "44da1f74779217b0f4d5ce676cb5cf223cdb0dc1"
+  version = "v2.0.1"
 
 [[projects]]
   digest = "1:ec6f9bf5e274c833c911923c9193867f3f18788c461f76f05f62bb1510e0ae65"
@@ -48,6 +48,14 @@
   pruneopts = "UT"
   revision = "ed099d42384823742bba0bf9a72b53b55c9e2e38"
   version = "v1.7.2"
+
+[[projects]]
+  digest = "1:228597ec86f00b7270b9f9e230f38abb285765850d5b7dfbe38b38f6ea1c409a"
+  name = "github.com/uber-go/tally"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "3332297784e46cd346ab6d9894fd4ea027dc9368"
+  version = "v3.3.12"
 
 [[projects]]
   digest = "1:ff6b126259880858441d0a43e63c3f2f9071601415e1f34a7f053f90cbef8464"

@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"fmt"
 	"net/http"
 	"tri-fitness/genesis/api/middleware"
 	r "tri-fitness/genesis/api/representations"
@@ -50,85 +51,9 @@ func NewAccountResource(
 	result := AccountResourceResult{
 		AccountResource: r,
 	}
-	result.AuthenticatedMuxConfiguration, result.UnauthenticatedMuxConfiguration =
-		r.MuxConfiguration()
+	result.AuthenticatedMuxConfiguration,
+		result.UnauthenticatedMuxConfiguration = r.MuxConfiguration()
 	return result
-}
-
-func (ar *AccountResource) MuxConfiguration() (authenticated, unauthenticated server.MuxConfiguration) {
-	authMiddleware :=
-		middleware.NewAuthenticationMiddleware(
-			middleware.AuthenticationMiddlewareParameters{
-				Logger:        ar.logger,
-				Authenticator: ar.authenticator,
-			})
-	loggingMiddleware :=
-		middleware.NewLoggingMiddleware(ar.logger)
-	errorMiddleware :=
-		middleware.NewErrorMiddleware(ar.logger)
-
-	authenticated = server.MuxConfiguration{
-		PathPrefix: "/accounts",
-		Middleware: []mux.MiddlewareFunc{
-			authMiddleware.Authenticate,
-			errorMiddleware.HandleError,
-			loggingMiddleware.Log,
-		},
-		Handlers: []server.HandlerConfiguration{
-			{
-				Path:        "/{uuid}/",
-				HandlerFunc: ar.Get,
-				Methods:     []string{"GET"},
-			},
-			{
-				Path:        "/{uuid}",
-				HandlerFunc: ar.Get,
-				Methods:     []string{"GET"},
-			},
-			{
-				Path:        "/{uuid}",
-				HandlerFunc: ar.Replace,
-				Methods:     []string{"PUT"},
-			},
-			{
-				Path:        "/{uuid}/",
-				HandlerFunc: ar.Replace,
-				Methods:     []string{"PUT"},
-			},
-			{
-				Path:        "/{uuid}",
-				HandlerFunc: ar.Delete,
-				Methods:     []string{"DELETE"},
-			},
-			{
-				Path:        "/{uuid}/",
-				HandlerFunc: ar.Delete,
-				Methods:     []string{"DELETE"},
-			},
-		},
-	}
-
-	unauthenticated = server.MuxConfiguration{
-		PathPrefix: "/accounts",
-		Middleware: []mux.MiddlewareFunc{
-			loggingMiddleware.Log,
-			errorMiddleware.HandleError,
-		},
-		Handlers: []server.HandlerConfiguration{
-			{
-				Path:        "",
-				HandlerFunc: ar.CreateAndAppend,
-				Methods:     []string{"POST"},
-			},
-			{
-				Path:        "/",
-				HandlerFunc: ar.CreateAndAppend,
-				Methods:     []string{"POST"},
-			},
-		},
-	}
-
-	return
 }
 
 func (ar *AccountResource) Get(w http.ResponseWriter, request *http.Request) {
@@ -142,7 +67,7 @@ func (ar *AccountResource) Get(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	// retrieve the account.
+	// retrieve the account uuid.
 	uuid := u.Must(u.FromString(vars["uuid"]))
 	account, err := ar.accountService.Get(uuid)
 	if err != nil {
@@ -161,7 +86,8 @@ func (ar *AccountResource) Get(w http.ResponseWriter, request *http.Request) {
 	rb.OK().Body(representation.AsBytes()).Respond()
 }
 
-func (ar *AccountResource) CreateAndAppend(w http.ResponseWriter, request *http.Request) {
+func (ar *AccountResource) CreateAndAppend(
+	w http.ResponseWriter, request *http.Request) {
 	rb := response.Builder(w)
 
 	// TODO(FREER) - don't use exact header value match here.
@@ -189,13 +115,68 @@ func (ar *AccountResource) CreateAndAppend(w http.ResponseWriter, request *http.
 }
 
 func (ar *AccountResource) Replace(w http.ResponseWriter, request *http.Request) {
+	vars := mux.Vars(request)
 	rb := response.Builder(w)
-	rb.OK().Body([]byte("worked!"))
-	rb.Respond()
+
+	// TODO(FREER) - don't use exact header value match here.
+	rf, ok := ar.representationFactories[request.Header.Get("Accept")]
+	if !ok {
+		rb.NotAcceptable().Respond()
+		return
+	}
+
+	account, err := rf.AccountEntityFromRequest(request)
+	if err != nil {
+		rb.InternalServerError().WithError(err).Respond()
+		return
+	}
+
+	uuid := u.Must(u.FromString(vars["uuid"]))
+	if account.UUID != uuid {
+		rb.BadRequest().WithError(fmt.Errorf("mismatching UUIDs")).Respond()
+		return
+	}
+
+	// retrieve the account.
+	a, err := ar.accountService.Get(uuid)
+	if err != nil {
+		rb.NotFound().WithError(err).Respond()
+		return
+	}
+
+	if len(a.Confirmations) < len(account.Confirmations) {
+		rb.BadRequest().
+			WithError(fmt.Errorf("cannot remove confirmations")).Respond()
+	}
+
+	// upsert the account.
+	err = ar.accountService.Put(account)
+	if err != nil {
+		rb.InternalServerError().WithError(err).Respond()
+		return
+	}
+
+	rb.NoContent().Respond()
 }
 
 func (ar *AccountResource) Delete(w http.ResponseWriter, request *http.Request) {
+	vars := mux.Vars(request)
 	rb := response.Builder(w)
-	rb.OK().Body([]byte("worked!"))
-	rb.Respond()
+
+	// retrieve the account uuid.
+	uuid := u.Must(u.FromString(vars["uuid"]))
+	_, err := ar.accountService.Get(uuid)
+	if err != nil {
+		rb.NotFound().WithError(err).Respond()
+		return
+	}
+
+	// delete the account.
+	err = ar.accountService.Remove(uuid)
+	if err != nil {
+		rb.InternalServerError().WithError(err).Respond()
+		return
+	}
+
+	rb.NoContent().Respond()
 }

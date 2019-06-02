@@ -39,6 +39,13 @@ func (j jsonRepresentationFactory) Account(
 		Phone:               account.Phone,
 	}
 
+	confirmationRepresentations := []Confirmation{}
+	for _, e := range account.Confirmations {
+		confirmationRepresentations =
+			append(confirmationRepresentations, j.confirmation(e))
+	}
+	representation.Confirmations = confirmationRepresentations
+
 	return &representation, nil
 }
 
@@ -69,6 +76,16 @@ func (j jsonRepresentationFactory) AccountEntityFromRequest(
 		}
 		representation.UUID = uuid
 	}
+
+	confirmations := []domain.Confirmation{}
+	for _, c := range representation.Confirmations {
+		confirmation, err := j.confirmationEntity(c)
+		if err != nil {
+			return domain.Account{}, err
+		}
+		confirmations = append(confirmations, confirmation)
+	}
+
 	account := domain.Account{
 		UUID:                uuid,
 		Type:                t,
@@ -79,6 +96,7 @@ func (j jsonRepresentationFactory) AccountEntityFromRequest(
 		Bio:                 representation.Bio,
 		Email:               representation.Email,
 		Phone:               representation.Phone,
+		Confirmations:       confirmations,
 	}
 	now := time.Now()
 	account.CreatedAt, account.UpdatedAt = now, now
@@ -205,4 +223,48 @@ func (j jsonRepresentationFactory) exerciseEntity(
 		},
 	}
 	return exercise, nil
+}
+
+func (j jsonRepresentationFactory) confirmation(
+	confirmation domain.Confirmation) Confirmation {
+
+	representation := Confirmation{
+		ID:          confirmation.ID,
+		ExpiredAt:   confirmation.ExpiredAt,
+		Type:        confirmation.Type.String(),
+		ConfirmedAt: confirmation.ConfirmedAt,
+		CreatedAt:   confirmation.CreatedAt,
+	}
+	return representation
+}
+
+func (j jsonRepresentationFactory) confirmationEntity(
+	representation Confirmation) (domain.Confirmation, error) {
+
+	confirmationType, err :=
+		domain.NewConfirmationTypeFromString(representation.Type)
+	if err != nil {
+		return domain.Confirmation{}, err
+	}
+	return domain.Confirmation{
+		ID:          representation.ID,
+		ConfirmedAt: representation.ConfirmedAt,
+		CreatedAt:   representation.CreatedAt,
+		ExpiredAt:   representation.ExpiredAt,
+		Type:        confirmationType,
+	}, nil
+}
+
+func (j jsonRepresentationFactory) CodeEntityFromRequest(
+	request *http.Request) (domain.Code, error) {
+
+	representation := Code{}
+	if err := j.decode(request, &representation); err != nil {
+		return domain.Code{}, err
+	}
+
+	code := domain.Code{
+		Code: representation.Code,
+	}
+	return code, nil
 }

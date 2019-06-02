@@ -7,95 +7,153 @@ import (
 	"tri-fitness/genesis/domain"
 
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
 type AccountDataMapperParameters struct {
 	fx.In
 
-	DB *sql.DB `name:"rwDB"`
+	DB     *sql.DB `name:"rwDB"`
+	Logger *zap.Logger
 }
 
 type AccountDataMapper struct {
-	db *sql.DB
+	db     *sql.DB
+	logger *zap.Logger
 }
 
 func NewAccountDataMapper(
 	parameters AccountDataMapperParameters) AccountDataMapper {
 
-	return AccountDataMapper{db: parameters.DB}
+	return AccountDataMapper{db: parameters.DB, logger: parameters.Logger}
 }
 
-func (dm *AccountDataMapper) Insert(accounts ...interface{}) error {
-	as := []domain.Account{}
+func (dm *AccountDataMapper) toAccount(accounts ...interface{}) ([]domain.Account, error) {
+	accs := []domain.Account{}
 	for _, account := range accounts {
-		var a domain.Account
+		var acc domain.Account
 		var ok bool
-		if a, ok = account.(domain.Account); !ok {
-			return errors.New("invalid type")
+		if acc, ok = account.(domain.Account); !ok {
+			return []domain.Account{}, errors.New("invalid type")
 		}
-		as = append(as, a)
+		accs = append(accs, acc)
 	}
-	return dm._Insert(as...)
+	return accs, nil
 }
 
-func (dm *AccountDataMapper) _Insert(accounts ...domain.Account) error {
-
-	sqlStatements := []string{}
-	sqlArgs := []interface{}{}
-	for _, a := range accounts {
-		sql :=
-			`INSERT INTO ACCOUNT
-			(
-				UUID,
-				TYPE,
-				GIVEN_NAME,
-				SURNAME,
-				BIO,
-				EMAIL_ADDRESS,
-				PHONE_NUMBER,
-				PRIMARY_CREDENTIAL,
-				SECONDARY_CREDENTIAL,
-				CREATED_AT,
-				UPDATED_AT,
-				DELETED_AT
-			)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-		sqlStatements = append(sqlStatements, sql)
-		sqlArgs =
-			append(sqlArgs,
-				a.UUID.String(), a.Type, a.GivenName, a.Surname, a.Bio,
-				a.Email, a.Phone, a.PrimaryCredential,
-				a.SecondaryCredential, a.CreatedAt, a.UpdatedAt, a.DeletedAt)
+func (dm *AccountDataMapper) Insert(tx *sql.Tx, accounts ...interface{}) error {
+	if len(accounts) == 0 {
+		return nil
 	}
-	statement, err :=
-		dm.db.Prepare(strings.Join(sqlStatements, ";"))
+	accs, err := dm.toAccount(accounts...)
 	if err != nil {
 		return err
 	}
-	defer statement.Close()
-	_, err = statement.Exec(sqlArgs...)
-	return err
+	return dm.insert(tx, accs...)
 }
 
-func (dm *AccountDataMapper) Update(accounts ...interface{}) error {
-	as := []domain.Account{}
+func (dm *AccountDataMapper) insertSQL(accounts ...domain.Account) (sql string, args []interface{}) {
+	sql =
+		`INSERT INTO ACCOUNT
+		(
+			UUID,
+			TYPE,
+			GIVEN_NAME,
+			SURNAME,
+			BIO,
+			EMAIL_ADDRESS,
+			PHONE_NUMBER,
+			PRIMARY_CREDENTIAL,
+			SECONDARY_CREDENTIAL,
+			TARGET_UUID,
+			CREATED_AT,
+			UPDATED_AT,
+			DELETED_AT
+		) VALUES `
+	var vals []string
 	for _, account := range accounts {
-		var a domain.Account
-		var ok bool
-		if a, ok = account.(domain.Account); !ok {
-			return errors.New("invalid type")
-		}
-		as = append(as, a)
+		vals = append(vals, "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+		args = append(args,
+			account.UUID.String(),
+			account.Type.String(),
+			account.GivenName,
+			account.Surname,
+			account.Bio,
+			account.Email,
+			account.Phone,
+			account.PrimaryCredential,
+			account.SecondaryCredential,
+			account.NotificationTargetUUID,
+			account.CreatedAt,
+			account.UpdatedAt,
+			account.DeletedAt,
+		)
 	}
-	return dm._Update(as...)
+	sql = sql + strings.Join(vals, ", ") + ";"
+	return
 }
 
-func (dm *AccountDataMapper) _Update(accounts ...domain.Account) error {
+func (dm *AccountDataMapper) insertConfirmationsSQL(accounts ...domain.Account) (sql string, args []interface{}) {
+	sql =
+		`INSERT INTO CONFIRMATION
+		(
+			ID,
+			ACCOUNT_UUID,
+			TYPE,
+			CODE,
+			NOTIFICATION_UUID,
+			EXPIRED_AT,
+			CONFIRMED_AT,
+			CREATED_AT,
+			UPDATED_AT
+		)
+		VALUES `
+	var vals []string
+	for _, account := range accounts {
+		for _, confirmation := range account.Confirmations {
+			vals = append(vals, "(?, ?, ?, ?, ?, ?, ?, ?, ?)")
+			args = append(args,
+				confirmation.ID,
+				account.UUID.String(),
+				confirmation.Type.String(),
+				confirmation.Code,
+				confirmation.NotificationUUID,
+				confirmation.ExpiredAt,
+				confirmation.ConfirmedAt,
+				confirmation.CreatedAt,
+				confirmation.UpdatedAt,
+			)
+		}
+	}
+	sql = sql + strings.Join(vals, ", ") + ";"
+	return
+}
 
-	sqlStatements := []string{}
-	sqlArgs := []interface{}{}
-	for _, a := range accounts {
-		sql :=
+func (dm *AccountDataMapper) insert(tx *sql.Tx, accounts ...domain.Account) error {
+	sql, args := dm.insertSQL(accounts...)
+	err := dm.prepareAndExec(tx, sql, args)
+	if err != nil {
+		return err
+	}
+	sql, args = dm.insertConfirmationsSQL(accounts...)
+	return dm.prepareAndExec(tx, sql, args)
+}
+
+func (dm *AccountDataMapper) Update(tx *sql.Tx, accounts ...interface{}) error {
+	if len(accounts) == 0 {
+		return nil
+	}
+	accs, err := dm.toAccount(accounts...)
+	if err != nil {
+		return err
+	}
+	return dm.update(tx, accs...)
+}
+
+func (dm *AccountDataMapper) updateSQL(
+	accounts ...domain.Account) (sql []string, args [][]interface{}) {
+	for _, account := range accounts {
+		s :=
 			`UPDATE
 				ACCOUNT
 			SET
@@ -107,53 +165,99 @@ func (dm *AccountDataMapper) _Update(accounts ...domain.Account) error {
 				PHONE_NUMBER = ?,
 				PRIMARY_CREDENTIAL = ?,
 				SECONDARY_CREDENTIAL = ?,
+				TARGET_UUID = ?,
 				CREATED_AT = ?,
 				UPDATED_AT = ?,
 				DELETED_AT = ?
 			WHERE
 				UUID = ?`
-		sqlStatements = append(sqlStatements, sql)
-		sqlArgs =
-			append(sqlArgs,
-				a.Type, a.GivenName, a.Surname, a.Bio, a.Email,
-				a.Phone, a.PrimaryCredential, a.SecondaryCredential,
-				a.CreatedAt, a.UpdatedAt, a.DeletedAt)
-	}
-	statement, err :=
-		dm.db.Prepare(strings.Join(sqlStatements, ";"))
-	if err != nil {
-		return err
-	}
-	defer statement.Close()
-	_, err = statement.Exec(sqlArgs)
-	return err
-}
-
-func (dm *AccountDataMapper) Delete(accounts ...interface{}) error {
-	as := []domain.Account{}
-	for _, account := range accounts {
-		var a domain.Account
-		var ok bool
-		if a, ok = account.(domain.Account); !ok {
-			return errors.New("invalid type")
+		sql = append(sql, s)
+		sArgs := []interface{}{
+			account.Type.String(),
+			account.GivenName,
+			account.Surname,
+			account.Bio,
+			account.Email,
+			account.Phone,
+			account.PrimaryCredential,
+			account.SecondaryCredential,
+			account.NotificationTargetUUID,
+			account.CreatedAt,
+			account.UpdatedAt,
+			account.DeletedAt,
+			account.UUID.String(),
 		}
-		as = append(as, a)
+		args = append(args, sArgs)
+
+		// delete all confirmations.
+		cSQL, cArgs := dm.deleteConfirmationSQL(accounts...)
+		sql = append(sql, cSQL)
+		args = append(args, cArgs)
+
+		// re-insert all confirmations.
+		cSQL, cArgs = dm.insertConfirmationsSQL(accounts...)
+		sql = append(sql, cSQL)
+		args = append(args, cArgs)
 	}
-	return dm._Delete(as...)
+	return
 }
 
-func (dm *AccountDataMapper) _Delete(accounts ...domain.Account) error {
-	statement, err :=
-		dm.db.Prepare("DELETE FROM ACCOUNT WHERE uuid IN (?)")
+func (dm *AccountDataMapper) update(tx *sql.Tx, accounts ...domain.Account) error {
+	sql, args := dm.updateSQL(accounts...)
+	for idx, s := range sql {
+		if err := dm.prepareAndExec(tx, s, args[idx]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (dm *AccountDataMapper) Delete(tx *sql.Tx, accounts ...interface{}) error {
+	if len(accounts) == 0 {
+		return nil
+	}
+	accs, err := dm.toAccount(accounts...)
 	if err != nil {
 		return err
 	}
-	defer statement.Close()
+	return dm.delete(tx, accs...)
+}
 
-	uuids := []interface{}{}
+func (dm *AccountDataMapper) deleteSQL(accounts ...domain.Account) (sql string, args []interface{}) {
+	sql = "DELETE FROM ACCOUNT WHERE UUID IN (?)"
 	for _, account := range accounts {
-		uuids = append(uuids, account.UUID.String())
+		args = append(args, account.UUID.String())
 	}
-	_, err = statement.Exec(uuids...)
+	return
+}
+
+func (dm *AccountDataMapper) deleteConfirmationSQL(accounts ...domain.Account) (sql string, args []interface{}) {
+	sql = "DELETE FROM CONFIRMATION WHERE ID IN (?)"
+	for _, account := range accounts {
+		for _, confirmation := range account.Confirmations {
+			args = append(args, confirmation.ID)
+		}
+	}
+	return
+}
+
+func (dm *AccountDataMapper) delete(tx *sql.Tx, accounts ...domain.Account) error {
+	sql, args := dm.deleteConfirmationSQL(accounts...)
+	err := dm.prepareAndExec(tx, sql, args)
+	if err != nil {
+		return err
+	}
+	sql, args = dm.deleteSQL(accounts...)
+	return dm.prepareAndExec(tx, sql, args)
+}
+
+func (dm *AccountDataMapper) prepareAndExec(
+	tx *sql.Tx, sql string, args []interface{}) error {
+	s, err := tx.Prepare(sql)
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+	_, err = s.Exec(args...)
 	return err
 }

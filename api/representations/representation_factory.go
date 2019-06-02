@@ -15,4 +15,5 @@ type RepresentationFactory interface {
 	Exercise(domain.Exercise) (Representation, error)
 	ExerciseFromRequest(*http.Request) (Representation, error)
 	ExerciseEntityFromRequest(*http.Request) (domain.Exercise, error)
+	CodeEntityFromRequest(*http.Request) (domain.Code, error)
 }

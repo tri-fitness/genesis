@@ -16,8 +16,7 @@ restart:
 stop:
 		docker-compose --file ./docker/docker-compose.yaml stop
 
-clean: stop
-		docker-compose --file ./docker/docker-compose.yaml down --rmi 'local'
+clean:
 		go clean -x
 		rm -r --force vendor/
 

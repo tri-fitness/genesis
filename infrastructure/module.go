@@ -2,6 +2,7 @@ package infrastructure
 
 import (
 	"database/sql"
+	"time"
 	"tri-fitness/genesis/config"
 	"tri-fitness/genesis/domain"
 
@@ -9,14 +10,13 @@ import (
 	"github.com/freerware/workfx"
 	_ "github.com/go-sql-driver/mysql"
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
-type DataMapperResult struct {
+type SQLDataMapperResult struct {
 	fx.Out
 
-	Inserters map[work.TypeName]work.Inserter
-	Updaters  map[work.TypeName]work.Updater
-	Deleters  map[work.TypeName]work.Deleter
+	SQLDataMappers map[work.TypeName]work.SQLDataMapper
 }
 
 type DBResult struct {
@@ -25,18 +25,32 @@ type DBResult struct {
 	DB *sql.DB `name:"rwDB"`
 }
 
-type DataMapperParameters struct {
+type SQLDataMapperParameters struct {
 	fx.In
 
-	DB *sql.DB `name:"rwDB"`
+	Logger *zap.Logger
 }
 
 var Module = fx.Options(
 	fx.Provide(NewQueryFactory),
 	fx.Provide(NewRepositoryFactory),
 	fx.Provide(func(c config.Configuration) (DBResult, error) {
+		time.Sleep(30000)
 		dsn := c.Database.DSN()
-		db, err := sql.Open("mysql", dsn)
+		var current int
+		retryCount := 3
+		retryable := func() bool {
+			return current < retryCount
+		}
+		var db *sql.DB
+		var err error
+		for retryable() {
+			db, err = sql.Open("mysql", dsn)
+			if err == nil {
+				break
+			}
+			current = current + 1
+		}
 		if err != nil {
 			return DBResult{}, err
 		}
@@ -48,23 +62,18 @@ var Module = fx.Options(
 			DB: db,
 		}, nil
 	}),
-	fx.Provide(func(parameters DataMapperParameters) DataMapperResult {
-		inserters := make(map[work.TypeName]work.Inserter)
-		updaters := make(map[work.TypeName]work.Updater)
-		deleters := make(map[work.TypeName]work.Deleter)
+	fx.Provide(func(parameters SQLDataMapperParameters) SQLDataMapperResult {
+		dataMappers := make(map[work.TypeName]work.SQLDataMapper)
 		accountTN := work.TypeNameOf(domain.Account{})
 		dm := NewAccountDataMapper(AccountDataMapperParameters{
-			DB: parameters.DB,
+			Logger: parameters.Logger,
 		})
-		inserters[accountTN] = &dm
-		updaters[accountTN] = &dm
-		deleters[accountTN] = &dm
-		result := DataMapperResult{
-			Inserters: inserters,
-			Updaters:  updaters,
-			Deleters:  deleters,
+		dataMappers[accountTN] = &dm
+		result := SQLDataMapperResult{
+			SQLDataMappers: dataMappers,
 		}
 		return result
 	}),
 	workfx.Modules.SQLUnit,
+	fx.Provide(NewShortMessageService),
 )

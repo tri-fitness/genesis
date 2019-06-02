@@ -2,6 +2,7 @@ package application
 
 import (
 	"fmt"
+	"time"
 	"tri-fitness/genesis/domain"
 	infra "tri-fitness/genesis/infrastructure"
 
@@ -15,6 +16,7 @@ type AccountService struct {
 	uniter            work.Uniter
 	repositoryFactory infra.RepositoryFactory
 	queryFactory      infra.QueryFactory
+	sms               infra.ShortMessageService
 }
 
 type AccountServiceParameters struct {
@@ -23,6 +25,7 @@ type AccountServiceParameters struct {
 	Uniter            work.Uniter `name:"sqlWorkUniter"`
 	RepositoryFactory infra.RepositoryFactory
 	QueryFactory      infra.QueryFactory
+	SMS               infra.ShortMessageService
 }
 
 func NewAccountService(
@@ -31,22 +34,44 @@ func NewAccountService(
 		uniter:            parameters.Uniter,
 		repositoryFactory: parameters.RepositoryFactory,
 		queryFactory:      parameters.QueryFactory,
+		sms:               parameters.SMS,
 	}
 }
 
 func (a *AccountService) Create(account domain.Account) error {
+	// setup account for notifications.
+	targetUUID, err := a.sms.RegisterAccount(account)
+	if err != nil {
+		return err
+	}
+
+	// save account.
+	account.NotificationTargetUUID = targetUUID
+	now := time.Now()
+	account.UpdatedAt, account.CreatedAt = now, now
 	unit, err := a.uniter.Unit()
 	if err != nil {
 		return err
 	}
 	repository := a.repositoryFactory.Account(unit)
+
+	// hash password.
 	hashedCredential, err :=
-		bcrypt.GenerateFromPassword(
-			[]byte(account.SecondaryCredential), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
+		a.hashCredential(account.SecondaryCredential)
 	account.SecondaryCredential = string(hashedCredential)
+
+	// create confirmations.
+	code := 1234
+	expiresAt := time.Now().Add(5 * time.Minute)
+	pConfirmation := account.NewConfirmation(
+		domain.ConfirmationTypePhoneNumber,
+		code,
+		expiresAt,
+	)
+	notificationUUID, err := a.sms.SendPhoneConfirmation(account, pConfirmation)
+	pConfirmation.NotificationUUID = &notificationUUID
+	account.SetConfirmation(pConfirmation)
+
 	if err := repository.Add(account); err != nil {
 		return err
 	}
@@ -125,4 +150,16 @@ func (a *AccountService) GetByPrimaryCredential(
 		return empty, err
 	}
 	return accounts[0], nil
+}
+
+func (a *AccountService) hashCredential(
+	credential string) (string, error) {
+
+	hashedCredential, err :=
+		bcrypt.GenerateFromPassword(
+			[]byte(credential), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hashedCredential), nil
 }

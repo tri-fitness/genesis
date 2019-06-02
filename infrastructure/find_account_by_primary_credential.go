@@ -47,10 +47,11 @@ func (q *findAccountByPrimaryCredential) Execute() ([]domain.Account, error) {
 
 	for rows.Next() {
 		var deletedAt mysql.NullTime
+		var accountType string
 		a := domain.Account{}
 		fields := []interface{}{
 			&a.UUID,
-			&a.Type,
+			&accountType,
 			&a.GivenName,
 			&a.Surname,
 			&a.Bio,
@@ -58,6 +59,7 @@ func (q *findAccountByPrimaryCredential) Execute() ([]domain.Account, error) {
 			&a.Phone,
 			&a.PrimaryCredential,
 			&a.SecondaryCredential,
+			&a.NotificationTargetUUID,
 			&a.CreatedAt,
 			&a.UpdatedAt,
 			&deletedAt,
@@ -68,6 +70,11 @@ func (q *findAccountByPrimaryCredential) Execute() ([]domain.Account, error) {
 		if deletedAt.Valid {
 			a.DeletedAt = &deletedAt.Time
 		}
+		t, err := domain.AccountTypeFromString(accountType)
+		if err != nil {
+			return matches, err
+		}
+		a.Type = t
 		matches = append(matches, a)
 	}
 

@@ -14,6 +14,7 @@ import (
 
 var Module = fx.Options(
 	fx.Provide(resources.NewAccountResource),
+	fx.Provide(resources.NewConfirmationResource),
 	fx.Provide(server.New),
 	fx.Provide(zap.NewDevelopment),
 	fx.Provide(middleware.NewAuthenticator),

@@ -10,3 +10,8 @@ database:
     password: ${DB_PASSWORD}
     parseTime: ${DB_PARSE_TIME}
     charset: ${DB_CHARSET}
+
+dependencies:
+    noti:
+        host: localhost
+        port: 9090

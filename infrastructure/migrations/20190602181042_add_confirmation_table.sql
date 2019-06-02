@@ -1,0 +1,22 @@
+
+-- +goose Up
+-- SQL in section 'Up' is executed when this migration is applied
+CREATE TABLE `CONFIRMATION` (
+	`ID`					INTEGER			NOT NULL,
+	`ACCOUNT_UUID`			VARCHAR(128)	NOT NULL,
+	`CODE`					INTEGER			NOT NULL,
+	`TYPE`					VARCHAR(128)	NOT NULL,
+	`NOTIFICATION_UUID`		VARCHAR(128)	NULL,
+	`EXPIRED_AT`			DATETIME		NOT NULL,
+	`CONFIRMED_AT`			DATETIME		NULL,
+	`CREATED_AT`			DATETIME		NOT NULL,
+	`UPDATED_AT`			DATETIME		NOT NULL,
+
+	PRIMARY KEY(`ID`),
+	FOREIGN KEY(`ACCOUNT_UUID`)
+		REFERENCES `ACCOUNT` (`UUID`)
+);
+
+-- +goose Down
+-- SQL section 'Down' is executed when this migration is rolled back
+DROP TABLE `CONFIRMATION`;

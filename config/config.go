@@ -31,8 +31,9 @@ func NewDefault() (Configuration, error) {
 }
 
 type Configuration struct {
-	Server   ServerConfiguration
-	Database DatabaseConfiguration
+	Server       ServerConfiguration
+	Database     DatabaseConfiguration
+	Dependencies DependencyConfiguration
 }
 
 type ServerConfiguration struct {
@@ -48,6 +49,15 @@ type DatabaseConfiguration struct {
 	Password  string
 	ParseTime bool `yaml:"parseTime"`
 	Charset   string
+}
+
+type DependencyServiceConfiguration struct {
+	Host string
+	Port int
+}
+
+type DependencyConfiguration struct {
+	Noti DependencyServiceConfiguration
 }
 
 func (c DatabaseConfiguration) DSN() string {

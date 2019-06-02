@@ -10,15 +10,16 @@ import (
 type Account struct {
 	r.Representation `json:"-"`
 
-	UUID                u.UUID `json:"uuid"`
-	PrimaryCredential   string `json:"primaryCredential"`
-	SecondaryCredential string `json:"secondaryCredential"`
-	Type                string `json:"type"`
-	GivenName           string `json:"givenName"`
-	Surname             string `json:"surname"`
-	Bio                 string `json:"bio"`
-	Email               string `json:"emailAddress"`
-	Phone               string `json:"phoneNumber"`
+	UUID                u.UUID         `json:"uuid"`
+	PrimaryCredential   string         `json:"primaryCredential"`
+	SecondaryCredential string         `json:"secondaryCredential"`
+	Type                string         `json:"type"`
+	GivenName           string         `json:"givenName"`
+	Surname             string         `json:"surname"`
+	Bio                 string         `json:"bio"`
+	Email               string         `json:"emailAddress"`
+	Phone               string         `json:"phoneNumber"`
+	Confirmations       []Confirmation `json:"confirmations"`
 }
 
 // AsBytes provides the representation as bytes.

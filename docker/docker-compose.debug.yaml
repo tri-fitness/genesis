@@ -1,0 +1,9 @@
+version: '3'
+services:
+  genesis-db:
+    image: mysql
+    restart: always
+    env_file: ./db.env
+    volumes:
+      - './mysql/:/etc/mysql/conf.d'
+      - './mysql/startup_scripts/:/docker-entrypoint-initdb.d'
